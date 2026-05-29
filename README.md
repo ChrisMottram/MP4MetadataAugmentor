@@ -2,7 +2,7 @@
 
 `MP4MetadataAugmentor` is a high-performance, pure-Kotlin Android library designed to append custom metadata directly onto MP4 video files without altering the original video or audio streams. 
 
-By utilizing low-overhead tail-end injections, the SDK allows developers to bespoke data directly within the video file container itself, keeping it 100% playable in standard media players like VLC or Windows Media Player.
+By utilizing low-overhead tail-end injections, the SDK allows developers to embed bespoke data directly within the video file container itself, keeping it 100% playable in standard media players like VLC or Windows Media Player.
 
 ### ✨ Key Features
 
