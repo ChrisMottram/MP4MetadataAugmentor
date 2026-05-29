@@ -146,7 +146,6 @@ class Mp4MetadataAugmentor(
     fun extractMetadata(augmentedVideo: File, password: String? = null): String? {
         if (!augmentedVideo.exists()) return null
 
-        // Notice we moved the Try/Catch window inward so we don't swallow security exceptions
         return try {
             RandomAccessFile(augmentedVideo, "r").use { raf ->
                 val fileLength = raf.length()
@@ -168,7 +167,6 @@ class Mp4MetadataAugmentor(
                             throw IllegalArgumentException("Crypto Exception: Secure match data payload is password protected.")
                         }
 
-                        // CRYPTO CORRECTION: Let parsing/padding runtime exceptions pass through naturally
                         val secretKey = deriveKeyFromPassword(password, footerInfo.salt)
                         val decryptedBytes = decryptBytes(rawAtomBytes, secretKey)
                         String(decryptedBytes, StandardCharsets.UTF_8)
@@ -180,13 +178,44 @@ class Mp4MetadataAugmentor(
                 }
             }
         } catch (e: Exception) {
-            // If it's a known auth failure or invalid password trigger, throw it out to the UI or test
             if (e is IllegalArgumentException || e is javax.crypto.BadPaddingException) {
                 logger.e(TAG, "Authentication/Decryption failed for secure metadata block.", e)
                 throw e
             }
             logger.e(TAG, "General IO error executing fast-seek tracking.", e)
             null
+        }
+    }
+
+    /**
+       * Truncates the file back to its baseline video-only length.
+     */
+    fun stripMetadata(videoFile: File): Boolean {
+        if (!videoFile.exists()) {
+            logger.e(TAG, "Target file does not exist for stripping: ${videoFile.absolutePath}")
+            return false
+        }
+
+        return try {
+            RandomAccessFile(videoFile, "rw").use { raf ->
+                val fileLength = raf.length()
+                val existingDataAtomSize = locateExistingDataAtomSize(raf, fileLength)
+
+                if (existingDataAtomSize != -1) {
+                    val baselineOffset = fileLength - TOTAL_FOOTER_SIZE - existingDataAtomSize
+                    logger.i(TAG, "Metadata track verified. Stripping $existingDataAtomSize bytes. Reverting length to $baselineOffset.")
+
+                    // Instantly slice off the injected trailer data
+                    raf.setLength(baselineOffset)
+                    true
+                } else {
+                    logger.w(TAG, "Strip request ignored: No custom tracking atoms detected in target file.")
+                    false
+                }
+            }
+        } catch (e: Exception) {
+            logger.e(TAG, "Failed to strip metadata safely from file: ${videoFile.absolutePath}", e)
+            false
         }
     }
 
@@ -233,7 +262,6 @@ class Mp4MetadataAugmentor(
 
     private fun encryptBytes(plainBytes: ByteArray, secretKey: SecretKeySpec): ByteArray {
         val cipher = Cipher.getInstance(CRYPTO_ALGORITHM)
-        // For CBC stability inside trailing blocks, we can derive the IV directly from the key bytes safely
         val iv = ByteArray(16)
         System.arraycopy(secretKey.encoded, 0, iv, 0, 16)
         cipher.init(Cipher.ENCRYPT_MODE, secretKey, IvParameterSpec(iv))

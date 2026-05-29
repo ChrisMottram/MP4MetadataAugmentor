@@ -209,4 +209,31 @@ class Mp4MetadataAugmentorTest {
             fail("Encountered unexpected error processing raw plaintext block extraction: ${e.message}")
         }
     }
+    @Test
+    fun testMetadataStrippingRevertsFileToBaseline() {
+        val augmentor = Mp4MetadataAugmentor()
+        val testFile = File("C:\\Users\\Administrator\\Dev\\Kliq\\test.mp4") // Or your test file path
+        val testPayload = "{\"match_id\":999,\"player\":\"SquashMaster\"}"
+
+        val initialSize = testFile.length()
+
+        // 1. Inject the data
+        augmentor.appendMetadata(testFile, testPayload)
+        val augmentedSize = testFile.length()
+        org.junit.Assert.assertTrue(augmentedSize > initialSize)
+
+        // 2. Strip the data out
+        val stripSuccess = augmentor.stripMetadata(testFile)
+        org.junit.Assert.assertTrue(stripSuccess)
+
+        // 3. Verify absolute file sizes match perfectly
+        org.junit.Assert.assertEquals(initialSize, testFile.length())
+
+        // 4. Verify extraction now yields null
+        val missingPayload = augmentor.extractMetadata(testFile)
+        org.junit.Assert.assertNull(missingPayload)
+
+        println("[Strip Check Pass] File cleanly reverted to original byte index size: ${testFile.length()}")
+    }
+
 }
